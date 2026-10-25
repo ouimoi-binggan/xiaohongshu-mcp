@@ -106,6 +106,18 @@ type FavoriteFeedArgs struct {
 	Unfavorite bool   `json:"unfavorite,omitempty" jsonschema:"是否取消收藏，true为取消收藏，false或未设置则为收藏"`
 }
 
+// GetFavoriteAlbumArgs 读取指定收藏专辑参数
+type GetFavoriteAlbumArgs struct {
+	AlbumName string `json:"album_name" jsonschema:"收藏夹的完整名称，必须唯一匹配"`
+}
+
+// FavoriteFeedToAlbumArgs 收藏到指定专辑参数
+type FavoriteFeedToAlbumArgs struct {
+	FeedID    string `json:"feed_id" jsonschema:"小红书笔记ID，从Feed列表获取"`
+	XsecToken string `json:"xsec_token" jsonschema:"访问令牌，从Feed列表的xsecToken字段获取"`
+	AlbumName string `json:"album_name" jsonschema:"目标收藏夹的完整名称，必须唯一匹配"`
+}
+
 // ListNotificationsArgs 通知列表参数
 type ListNotificationsArgs struct {
 	Tab   string `json:"tab,omitempty" jsonschema:"通知分区: mentions(评论和@,默认)|likes(赞和收藏)|connections(新增关注)"`
@@ -464,6 +476,30 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 				"unfavorite": args.Unfavorite,
 			}
 			result := appServer.handleFavoriteFeed(ctx, argsMap)
+			return convertToMCPResult(result), nil, nil
+		}),
+	)
+
+	mcp.AddTool(server,
+		&mcp.Tool{
+			Name:        "get_favorite_album",
+			Description: "按完整名称查看当前登录账号的一个收藏夹，返回其中的笔记。收藏夹名称必须唯一匹配。",
+			Annotations: &mcp.ToolAnnotations{Title: "Get Favorite Album", ReadOnlyHint: true},
+		},
+		withPanicRecovery("get_favorite_album", func(ctx context.Context, req *mcp.CallToolRequest, args GetFavoriteAlbumArgs) (*mcp.CallToolResult, any, error) {
+			result := appServer.handleGetFavoriteAlbum(ctx, args.AlbumName)
+			return convertToMCPResult(result), nil, nil
+		}),
+	)
+
+	mcp.AddTool(server,
+		&mcp.Tool{
+			Name:        "favorite_feed_to_album",
+			Description: "收藏一篇尚未收藏的笔记，并立即加入指定收藏夹。名称必须唯一匹配；看不到明确成功提示时会报错。",
+			Annotations: &mcp.ToolAnnotations{Title: "Favorite Feed To Album", DestructiveHint: boolPtr(true)},
+		},
+		withPanicRecovery("favorite_feed_to_album", func(ctx context.Context, req *mcp.CallToolRequest, args FavoriteFeedToAlbumArgs) (*mcp.CallToolResult, any, error) {
+			result := appServer.handleFavoriteFeedToAlbum(ctx, args.FeedID, args.XsecToken, args.AlbumName)
 			return convertToMCPResult(result), nil, nil
 		}),
 	)

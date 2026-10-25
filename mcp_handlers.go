@@ -593,6 +593,33 @@ func (s *AppServer) handleFavoriteFeed(ctx context.Context, args map[string]inte
 	return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: fmt.Sprintf("%s成功 - Feed ID: %s", action, res.FeedID)}}}
 }
 
+func (s *AppServer) handleGetFavoriteAlbum(ctx context.Context, albumName string) *MCPToolResult {
+	albumName = strings.TrimSpace(albumName)
+	if albumName == "" {
+		return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: "查看收藏夹失败: 缺少album_name参数"}}, IsError: true}
+	}
+	result, err := s.xiaohongshuService.GetFavoriteAlbum(ctx, albumName)
+	if err != nil {
+		return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: "查看收藏夹失败: " + err.Error()}}, IsError: true}
+	}
+	data, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: "序列化收藏夹失败: " + err.Error()}}, IsError: true}
+	}
+	return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: string(data)}}}
+}
+
+func (s *AppServer) handleFavoriteFeedToAlbum(ctx context.Context, feedID, xsecToken, albumName string) *MCPToolResult {
+	if strings.TrimSpace(feedID) == "" || strings.TrimSpace(xsecToken) == "" || strings.TrimSpace(albumName) == "" {
+		return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: "收藏到专辑失败: feed_id、xsec_token、album_name均不能为空"}}, IsError: true}
+	}
+	result, err := s.xiaohongshuService.FavoriteFeedToAlbum(ctx, feedID, xsecToken, albumName)
+	if err != nil {
+		return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: "收藏到专辑失败: " + err.Error()}}, IsError: true}
+	}
+	return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: fmt.Sprintf("收藏并加入专辑成功 - Feed ID: %s，收藏夹: %s", result.FeedID, result.Album)}}}
+}
+
 // handlePostComment 处理发表评论到Feed
 func (s *AppServer) handlePostComment(ctx context.Context, args map[string]interface{}) *MCPToolResult {
 	logrus.Info("MCP: 发表评论到Feed")

@@ -545,6 +545,27 @@ func (s *XiaohongshuService) UnfavoriteFeed(ctx context.Context, feedID, xsecTok
 	return &ActionResult{FeedID: feedID, Success: true, Message: "取消收藏成功或未收藏"}, nil
 }
 
+// GetFavoriteAlbum 按名称读取当前账号的收藏专辑。
+func (s *XiaohongshuService) GetFavoriteAlbum(ctx context.Context, albumName string) (*xiaohongshu.FavoriteAlbum, error) {
+	b := newBrowser()
+	defer b.Close()
+	page := b.NewPage()
+	defer page.Close()
+	return xiaohongshu.NewFavoriteAlbumAction(page).GetByName(ctx, albumName)
+}
+
+// FavoriteFeedToAlbum 收藏笔记并加入指定专辑。
+func (s *XiaohongshuService) FavoriteFeedToAlbum(ctx context.Context, feedID, xsecToken, albumName string) (*xiaohongshu.FavoriteAlbumResult, error) {
+	b := newBrowser()
+	defer b.Close()
+	page := b.NewPage()
+	defer page.Close()
+	if err := xiaohongshu.NewFavoriteAlbumAction(page).FavoriteToAlbum(ctx, feedID, xsecToken, albumName); err != nil {
+		return nil, err
+	}
+	return &xiaohongshu.FavoriteAlbumResult{FeedID: feedID, Album: albumName, Success: true, Message: "收藏并加入专辑成功"}, nil
+}
+
 // ReplyCommentToFeed 回复指定评论
 func (s *XiaohongshuService) ReplyCommentToFeed(ctx context.Context, feedID, xsecToken, commentID, userID, content string) (*ReplyCommentResponse, error) {
 	b := newBrowser()
