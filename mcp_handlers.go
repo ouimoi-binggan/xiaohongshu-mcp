@@ -891,3 +891,21 @@ func (s *AppServer) handleSearchUsers(ctx context.Context, keyword string) *MCPT
 
 	return marshalMCPResult(result, "搜索用户")
 }
+
+func (s *AppServer) handlePrepareDirectMessage(ctx context.Context, redID, content string) *MCPToolResult {
+	logrus.Infof("MCP: 准备私信 red_id=%s", redID)
+	result, err := s.xiaohongshuService.PrepareDirectMessage(ctx, redID, content)
+	if err != nil {
+		return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: "准备私信失败: " + err.Error()}}, IsError: true}
+	}
+	return marshalMCPResult(result, "准备私信")
+}
+
+func (s *AppServer) handleSendPreparedDirectMessage(ctx context.Context, token string) *MCPToolResult {
+	logrus.Info("MCP: 发送已确认私信")
+	result, err := s.xiaohongshuService.SendPreparedDirectMessage(ctx, token)
+	if err != nil {
+		return &MCPToolResult{Content: []MCPContent{{Type: "text", Text: "发送私信失败: " + err.Error()}}, IsError: true}
+	}
+	return marshalMCPResult(result, "发送私信")
+}

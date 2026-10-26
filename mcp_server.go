@@ -141,6 +141,15 @@ type SearchUsersArgs struct {
 	Keyword string `json:"keyword" jsonschema:"用户昵称或完整小红书号"`
 }
 
+type PrepareDirectMessageArgs struct {
+	RedID   string `json:"red_id" jsonschema:"收件人的完整小红书号；必须精确唯一匹配"`
+	Content string `json:"content" jsonschema:"准备发送的私信正文"`
+}
+
+type SendPreparedDirectMessageArgs struct {
+	ConfirmationToken string `json:"confirmation_token" jsonschema:"prepare_direct_message 返回的十分钟有效一次性确认码"`
+}
+
 // InitMCPServer 初始化 MCP Server
 func InitMCPServer(appServer *AppServer) *mcp.Server {
 	// 创建 MCP Server
@@ -621,7 +630,33 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 		}),
 	)
 
-	logrus.Infof("Registered %d MCP tools", 20)
+	// 工具 21: 准备私信（不输入、不发送）
+	mcp.AddTool(server,
+		&mcp.Tool{
+			Name:        "prepare_direct_message",
+			Description: "精确核对小红书号和主页私信入口，生成十分钟有效的一次性确认码。不会输入或发送消息。返回收件人和完整正文供用户确认。",
+			Annotations: &mcp.ToolAnnotations{Title: "Prepare Direct Message", ReadOnlyHint: true},
+		},
+		withPanicRecovery("prepare_direct_message", func(ctx context.Context, req *mcp.CallToolRequest, args PrepareDirectMessageArgs) (*mcp.CallToolResult, any, error) {
+			result := appServer.handlePrepareDirectMessage(ctx, args.RedID, args.Content)
+			return convertToMCPResult(result), nil, nil
+		}),
+	)
+
+	// 工具 22: 持一次性确认码发送私信
+	mcp.AddTool(server,
+		&mcp.Tool{
+			Name:        "send_prepared_direct_message",
+			Description: "使用 prepare_direct_message 返回的一次性确认码发送已核对的私信。确认码十分钟过期且只能使用一次；默认一分钟最多发送一条。",
+			Annotations: &mcp.ToolAnnotations{Title: "Send Prepared Direct Message", DestructiveHint: boolPtr(true)},
+		},
+		withPanicRecovery("send_prepared_direct_message", func(ctx context.Context, req *mcp.CallToolRequest, args SendPreparedDirectMessageArgs) (*mcp.CallToolResult, any, error) {
+			result := appServer.handleSendPreparedDirectMessage(ctx, args.ConfirmationToken)
+			return convertToMCPResult(result), nil, nil
+		}),
+	)
+
+	logrus.Infof("Registered %d MCP tools", 22)
 }
 
 // convertToMCPResult 将自定义的 MCPToolResult 转换为官方 SDK 的格式

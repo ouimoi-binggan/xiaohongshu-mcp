@@ -660,6 +660,22 @@ func (s *XiaohongshuService) SearchUsers(ctx context.Context, keyword string) ([
 	return xiaohongshu.NewUserSearchAction(page).Search(ctx, keyword)
 }
 
+func (s *XiaohongshuService) PrepareDirectMessage(ctx context.Context, redID, content string) (*xiaohongshu.DirectMessageDraft, error) {
+	b := newBrowser()
+	defer b.Close()
+	page := b.NewPage()
+	defer page.Close()
+	return xiaohongshu.PrepareDirectMessage(ctx, page, redID, content)
+}
+
+func (s *XiaohongshuService) SendPreparedDirectMessage(ctx context.Context, token string) (*xiaohongshu.DirectMessageResult, error) {
+	b := newBrowser()
+	defer b.Close()
+	page := b.NewPage()
+	defer page.Close()
+	return xiaohongshu.SendPreparedDirectMessage(ctx, page, token)
+}
+
 func newBrowser() *headless_browser.Browser {
 	return browser.NewBrowser(configs.IsHeadless(),
 		browser.WithFingerprintSeed(configs.FingerprintSeed()),
