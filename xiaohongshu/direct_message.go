@@ -252,32 +252,19 @@ func openRecipientChat(ctx context.Context, page *rod.Page, recipient UserSearch
 		return fmt.Errorf("主页身份复核失败，未打开私信")
 	}
 
-	entry, err := findVisibleProfileMessageEntry(pp)
-	if err != nil {
-		return fmt.Errorf("该主页没有唯一、可确认的私信入口；可见操作控件为：%s", describeVisibleActionControls(pp))
-	}
-	humanize.Delay(ctx, humanize.BeforeClick)
-	if err := humanize.Click(entry); err != nil {
-		return fmt.Errorf("无法打开私信: %w", err)
-	}
 
-	// The profile IM control is handled by the site's SPA. On some builds a
-	// trusted pointer sequence lands on the icon but its delegated handler does
-	// not run. If the page remains unchanged, activate the same already-verified
-	// button through the DOM; never fall back to a different or ambiguous icon.
-	time.Sleep(1500 * time.Millisecond)
-	if info, infoErr := pp.Info(); infoErr == nil && !strings.Contains(info.URL, "/chat") {
-		if _, editorErr := findMessageEditor(pp); editorErr != nil {
-			if _, evalErr := entry.Eval(`() => { this.click(); return true }`); evalErr != nil {
-				return fmt.Errorf("私信按钮的指针点击未生效，DOM 激活也失败: %w", evalErr)
-			}
-		}
-	}
+	// The verified profile's icon-only message control routes to this canonical
+	// chat URL. Navigate directly so the operation does not depend on which
+	// nested SVG node receives the click. user_id has already been matched to
+	// the HTTPS profile URL and the public Red ID above.
+	chatURL := "https://www.xiaohongshu.com/chat?openUid=" + url.QueryEscape(recipient.UserID)
+	pp.MustNavigate(chatURL).MustWaitLoad()
+	humanize.Delay(ctx, humanize.AfterNavigate)
 
 	deadline = time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		info, infoErr := pp.Info()
-		if infoErr == nil && strings.Contains(info.URL, "/chat") {
+		if infoErr == nil && isExpectedRecipientChat(info.URL, recipient.UserID) {
 			if !requireEditor {
 				return nil
 			}
@@ -287,7 +274,15 @@ func openRecipientChat(ctx context.Context, page *rod.Page, recipient UserSearch
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	return fmt.Errorf("点击私信后没有进入可编辑的聊天页，未发送；点击后页面状态：%s", describeMessageSurface(pp))
+	return fmt.Errorf("没有进入已核对收件人的可编辑聊天页，未发送；页面状态：%s", describeMessageSurface(pp))
+}
+
+func isExpectedRecipientChat(rawURL, userID string) bool {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Host != "www.xiaohongshu.com" || parsed.Path != "/chat" {
+		return false
+	}
+	return parsed.Query().Get("openUid") == userID
 }
 
 func describeMessageSurface(page *rod.Page) string {
