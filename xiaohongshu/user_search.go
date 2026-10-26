@@ -41,7 +41,7 @@ func (s *UserSearchAction) Search(ctx context.Context, keyword string) ([]UserSe
 	}
 
 	page := s.page.Context(ctx).Timeout(75 * time.Second)
-	page.MustNavigate(makeSearchURL(keyword)).MustWaitLoad()
+	page.MustNavigate(makeUserSearchURL(keyword)).MustWaitLoad()
 	humanize.Delay(ctx, humanize.AfterNavigate)
 
 	// The search page defaults to notes. Click the visible exact-text 用户 tab
@@ -52,9 +52,12 @@ func (s *UserSearchAction) Search(ctx context.Context, keyword string) ([]UserSe
 			const s = getComputedStyle(el);
 			return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
 		};
-		const candidates = [...document.querySelectorAll('[role="tab"], .channel, .reds-tab-item, button, span, div')];
-		const el = candidates.find(x => visible(x) && (x.textContent || '').trim() === '用户');
-		if (!el) return false;
+		const candidates = [...document.querySelectorAll('[role="tab"], .channel, .reds-tab-item, button, span')]
+			.filter(x => visible(x) && (x.textContent || '').trim() === '用户')
+			.sort((a, b) => a.querySelectorAll('*').length - b.querySelectorAll('*').length);
+		if (!candidates.length) return false;
+		const leaf = candidates[0];
+		const el = leaf.closest('[role="tab"], .channel, .reds-tab-item, button') || leaf;
 		el.click();
 		return true;
 	}`)
@@ -81,7 +84,9 @@ func (s *UserSearchAction) Search(ctx context.Context, keyword string) ([]UserSe
 			const s = getComputedStyle(el);
 			return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
 		};
-		const links = [...document.querySelectorAll('a[href*="/user/profile/"]')].filter(visible);
+		const links = [...document.querySelectorAll('a[href*="/user/profile/"]')].filter(a =>
+			visible(a) && !a.closest('nav, .side-bar, .side-bar-container, .side-bar-component')
+		);
 		return JSON.stringify(links.map(a => {
 			const u = new URL(a.href, location.href);
 			let card = a;
@@ -122,6 +127,9 @@ func (s *UserSearchAction) Search(ctx context.Context, keyword string) ([]UserSe
 		}
 		item := UserSearchItem{UserID: userID, ProfileURL: card.Href}
 		item.Nickname, item.RedID = parseUserCardLines(lines)
+		if item.RedID == "" {
+			continue
+		}
 		if parsed, parseErr := url.Parse(card.Href); parseErr == nil {
 			item.XsecToken = parsed.Query().Get("xsec_token")
 		}
@@ -139,6 +147,15 @@ func (s *UserSearchAction) Search(ctx context.Context, keyword string) ([]UserSe
 		return items[i].RedID < items[j].RedID
 	})
 	return items, nil
+}
+
+func makeUserSearchURL(keyword string) string {
+	values := url.Values{}
+	values.Set("keyword", keyword)
+	values.Set("source", "web_search_result_users")
+	values.Set("target_search", "users")
+	values.Set("type", "user")
+	return fmt.Sprintf("https://www.xiaohongshu.com/search_result?%s", values.Encode())
 }
 
 func compactLines(text string) []string {
