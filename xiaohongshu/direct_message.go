@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/input"
 	"github.com/xpzouying/xiaohongshu-mcp/humanize"
 )
 
@@ -64,6 +65,9 @@ func PrepareDirectMessage(ctx context.Context, page *rod.Page, redID, content st
 	}
 	if len([]rune(content)) > 1000 {
 		return nil, fmt.Errorf("私信正文过长（最多 1000 个字符）")
+	}
+	if strings.ContainsAny(content, "\r\n") {
+		return nil, fmt.Errorf("当前私信发送流程仅支持单行正文")
 	}
 
 	var recipient UserSearchItem
@@ -166,10 +170,8 @@ func SendPreparedDirectMessage(ctx context.Context, page *rod.Page, token string
 		return nil, fmt.Errorf("无法输入私信正文: %w", err)
 	}
 	humanize.Delay(ctx, humanize.AfterType)
-
-	sendButton, err := findVisibleExactText(page, []string{"发送"}, "button, [role=button]")
-	if err != nil {
-		return nil, fmt.Errorf("未找到明确的发送按钮，未发送: %w", err)
+	if typed := strings.TrimSpace(messageEditorText(editor)); typed != draft.Content {
+		return nil, fmt.Errorf("编辑框正文复核失败，未发送")
 	}
 
 	// Burn the token just before the irreversible click.
@@ -184,12 +186,15 @@ func SendPreparedDirectMessage(ctx context.Context, page *rod.Page, token string
 	directMessageState.Unlock()
 
 	humanize.Delay(ctx, humanize.BeforeSubmit)
-	if err := humanize.Click(sendButton); err != nil {
-		return nil, fmt.Errorf("点击发送时失败；确认码已作废以防重复发送: %w", err)
+	if err := editor.Focus(); err != nil {
+		return nil, fmt.Errorf("聚焦消息编辑框失败；确认码已作废以防重复发送: %w", err)
+	}
+	if err := page.Keyboard.Press(input.Enter); err != nil {
+		return nil, fmt.Errorf("按回车发送时失败；确认码已作废以防重复发送: %w", err)
 	}
 
 	if !waitMessageDelivered(page, draft.Content, editor, before, 12*time.Second) {
-		return nil, fmt.Errorf("已点击发送，但未能确认正文进入消息区；结果不确定，请人工查看，勿自动重试")
+		return nil, fmt.Errorf("已按回车发送，但未能确认正文进入消息区；结果不确定，请人工查看，勿自动重试")
 	}
 	return &DirectMessageResult{
 		Recipient: draft.Recipient,
@@ -197,6 +202,14 @@ func SendPreparedDirectMessage(ctx context.Context, page *rod.Page, token string
 		Sent:      true,
 		Message:   "私信已发送并在消息区确认出现",
 	}, nil
+}
+
+func messageEditorText(editor *rod.Element) string {
+	res, err := editor.Eval(`() => ('value' in this ? this.value : (this.innerText || this.textContent || ''))`)
+	if err != nil {
+		return ""
+	}
+	return res.Value.Str()
 }
 
 func exactRedIDMatches(items []UserSearchItem, redID string) []UserSearchItem {
@@ -415,8 +428,7 @@ func waitMessageDelivered(page *rod.Page, content string, editor *rod.Element, b
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		count := countDeliveredText(page, content, editor)
-		value, _ := editor.Property("value")
-		editorEmpty := strings.TrimSpace(value.Str()) == ""
+		editorEmpty := strings.TrimSpace(messageEditorText(editor)) == ""
 		if count > before && editorEmpty {
 			return true
 		}
