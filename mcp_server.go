@@ -142,8 +142,12 @@ type SearchUsersArgs struct {
 }
 
 type PrepareDirectMessageArgs struct {
-	RedID   string `json:"red_id" jsonschema:"收件人的完整小红书号；必须精确唯一匹配"`
-	Content string `json:"content" jsonschema:"准备发送的私信正文"`
+	RedID      string `json:"red_id" jsonschema:"收件人的完整小红书号；必须精确匹配"`
+	Content    string `json:"content" jsonschema:"准备发送的私信正文"`
+	UserID     string `json:"user_id,omitempty" jsonschema:"可选：search_xhs_users 已核对返回的内部用户ID；与 profile_url 一起使用"`
+	Nickname   string `json:"nickname,omitempty" jsonschema:"可选：search_xhs_users 已核对返回的昵称，用于主页二次核对"`
+	ProfileURL string `json:"profile_url,omitempty" jsonschema:"可选：search_xhs_users 已核对返回的完整主页地址；与 user_id 一起使用"`
+	XsecToken  string `json:"xsec_token,omitempty" jsonschema:"可选：search_xhs_users 已核对返回的访问令牌"`
 }
 
 type SendPreparedDirectMessageArgs struct {
@@ -638,7 +642,7 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 			Annotations: &mcp.ToolAnnotations{Title: "Prepare Direct Message", ReadOnlyHint: true},
 		},
 		withPanicRecovery("prepare_direct_message", func(ctx context.Context, req *mcp.CallToolRequest, args PrepareDirectMessageArgs) (*mcp.CallToolResult, any, error) {
-			result := appServer.handlePrepareDirectMessage(ctx, args.RedID, args.Content)
+			result := appServer.handlePrepareDirectMessage(ctx, args)
 			return convertToMCPResult(result), nil, nil
 		}),
 	)

@@ -660,12 +660,12 @@ func (s *XiaohongshuService) SearchUsers(ctx context.Context, keyword string) ([
 	return xiaohongshu.NewUserSearchAction(page).Search(ctx, keyword)
 }
 
-func (s *XiaohongshuService) PrepareDirectMessage(ctx context.Context, redID, content string) (*xiaohongshu.DirectMessageDraft, error) {
+func (s *XiaohongshuService) PrepareDirectMessage(ctx context.Context, redID, content string, resolved *xiaohongshu.ResolvedRecipient) (*xiaohongshu.DirectMessageDraft, error) {
 	b := newBrowser()
 	defer b.Close()
 	page := b.NewPage()
 	defer page.Close()
-	return xiaohongshu.PrepareDirectMessage(ctx, page, redID, content)
+	return xiaohongshu.PrepareDirectMessage(ctx, page, redID, content, resolved)
 }
 
 func (s *XiaohongshuService) SendPreparedDirectMessage(ctx context.Context, token string) (*xiaohongshu.DirectMessageResult, error) {

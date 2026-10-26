@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,13 @@ type DirectMessageResult struct {
 	Message   string         `json:"message"`
 }
 
+type ResolvedRecipient struct {
+	UserID     string
+	Nickname   string
+	ProfileURL string
+	XsecToken  string
+}
+
 type directMessageDraftRecord struct {
 	DirectMessageDraft
 	used bool
@@ -45,7 +53,7 @@ var directMessageState = struct {
 
 // PrepareDirectMessage resolves one exact public Red ID and verifies that its
 // profile exposes a private-message entry. It does not type or send content.
-func PrepareDirectMessage(ctx context.Context, page *rod.Page, redID, content string) (*DirectMessageDraft, error) {
+func PrepareDirectMessage(ctx context.Context, page *rod.Page, redID, content string, resolved *ResolvedRecipient) (*DirectMessageDraft, error) {
 	redID = strings.TrimSpace(redID)
 	content = strings.TrimSpace(content)
 	if redID == "" {
@@ -58,16 +66,25 @@ func PrepareDirectMessage(ctx context.Context, page *rod.Page, redID, content st
 		return nil, fmt.Errorf("私信正文过长（最多 1000 个字符）")
 	}
 
-	search := NewUserSearchAction(page)
-	items, err := search.Search(ctx, redID)
-	if err != nil {
-		return nil, err
+	var recipient UserSearchItem
+	if resolved != nil && strings.TrimSpace(resolved.UserID) != "" && strings.TrimSpace(resolved.ProfileURL) != "" {
+		var err error
+		recipient, err = recipientFromResolved(redID, *resolved)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		search := NewUserSearchAction(page)
+		items, err := search.Search(ctx, redID)
+		if err != nil {
+			return nil, err
+		}
+		matches := exactRedIDMatches(items, redID)
+		if len(matches) != 1 {
+			return nil, fmt.Errorf("小红书号 %s 精确匹配到 %d 个用户，已中止；可传入 search_xhs_users 已核对返回的 user_id/profile_url/xsec_token", redID, len(matches))
+		}
+		recipient = matches[0]
 	}
-	matches := exactRedIDMatches(items, redID)
-	if len(matches) != 1 {
-		return nil, fmt.Errorf("小红书号 %s 精确匹配到 %d 个用户，已中止", redID, len(matches))
-	}
-	recipient := matches[0]
 
 	if err := openRecipientChat(ctx, page, recipient, true); err != nil {
 		return nil, err
@@ -88,6 +105,30 @@ func PrepareDirectMessage(ctx context.Context, page *rod.Page, redID, content st
 	directMessageState.drafts[token] = &directMessageDraftRecord{DirectMessageDraft: draft}
 	directMessageState.Unlock()
 	return &draft, nil
+}
+
+func recipientFromResolved(redID string, resolved ResolvedRecipient) (UserSearchItem, error) {
+	userID := strings.TrimSpace(resolved.UserID)
+	profileURL := strings.TrimSpace(resolved.ProfileURL)
+	parsed, err := url.Parse(profileURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host != "www.xiaohongshu.com" {
+		return UserSearchItem{}, fmt.Errorf("profile_url 不是有效的小红书 HTTPS 主页")
+	}
+	m := profileIDPattern.FindStringSubmatch(parsed.Path)
+	if len(m) != 2 || m[1] != userID {
+		return UserSearchItem{}, fmt.Errorf("profile_url 与 user_id 不一致，已中止")
+	}
+	token := strings.TrimSpace(resolved.XsecToken)
+	if token == "" {
+		token = parsed.Query().Get("xsec_token")
+	}
+	return UserSearchItem{
+		UserID:     userID,
+		Nickname:   strings.TrimSpace(resolved.Nickname),
+		RedID:      redID,
+		ProfileURL: profileURL,
+		XsecToken:  token,
+	}, nil
 }
 
 // SendPreparedDirectMessage consumes a prepared one-time confirmation token.
@@ -213,7 +254,7 @@ func openRecipientChat(ctx context.Context, page *rod.Page, recipient UserSearch
 
 	entry, err := findVisibleExactText(pp, []string{"私信", "发消息"}, "button, [role=button], a")
 	if err != nil {
-		return fmt.Errorf("该主页没有可确认的私信入口: %w", err)
+		return fmt.Errorf("该主页没有可确认的文字私信入口；可见操作控件为：%s", describeVisibleActionControls(pp))
 	}
 	humanize.Delay(ctx, humanize.BeforeClick)
 	if err := humanize.Click(entry); err != nil {
@@ -234,6 +275,27 @@ func openRecipientChat(ctx context.Context, page *rod.Page, recipient UserSearch
 		time.Sleep(300 * time.Millisecond)
 	}
 	return fmt.Errorf("点击私信后没有进入可编辑的聊天页，未发送")
+}
+
+func describeVisibleActionControls(page *rod.Page) string {
+	res, err := page.Eval(`() => JSON.stringify(
+		[...document.querySelectorAll('button, [role="button"], a')].filter(el => {
+			const r = el.getBoundingClientRect();
+			const s = getComputedStyle(el);
+			return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
+		}).slice(0, 80).map(el => ({
+			tag: el.tagName.toLowerCase(),
+			text: (el.innerText || '').trim().slice(0, 40),
+			class_name: typeof el.className === 'string' ? el.className.slice(0, 160) : '',
+			title: (el.getAttribute('title') || '').slice(0, 80),
+			aria_label: (el.getAttribute('aria-label') || '').slice(0, 80),
+			href_path: el.tagName === 'A' ? new URL(el.href, location.href).pathname : ''
+		}))
+	)`)
+	if err != nil {
+		return "（读取控件结构失败）"
+	}
+	return res.Value.Str()
 }
 
 func findVisibleExactText(page *rod.Page, texts []string, selector string) (*rod.Element, error) {
