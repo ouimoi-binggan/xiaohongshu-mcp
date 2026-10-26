@@ -252,9 +252,9 @@ func openRecipientChat(ctx context.Context, page *rod.Page, recipient UserSearch
 		return fmt.Errorf("主页身份复核失败，未打开私信")
 	}
 
-	entry, err := findVisibleExactText(pp, []string{"私信", "发消息"}, "button, [role=button], a")
+	entry, err := findVisibleProfileMessageEntry(pp)
 	if err != nil {
-		return fmt.Errorf("该主页没有可确认的文字私信入口；可见操作控件为：%s", describeVisibleActionControls(pp))
+		return fmt.Errorf("该主页没有唯一、可确认的私信入口；可见操作控件为：%s", describeVisibleActionControls(pp))
 	}
 	humanize.Delay(ctx, humanize.BeforeClick)
 	if err := humanize.Click(entry); err != nil {
@@ -275,6 +275,32 @@ func openRecipientChat(ctx context.Context, page *rod.Page, recipient UserSearch
 		time.Sleep(300 * time.Millisecond)
 	}
 	return fmt.Errorf("点击私信后没有进入可编辑的聊天页，未发送")
+}
+
+func findVisibleProfileMessageEntry(page *rod.Page) (*rod.Element, error) {
+	// Current Xiaohongshu profiles render the message entry as an icon-only
+	// button. Its accessible name lives in title rather than innerText.
+	// Require both the dedicated profile-IM class and the exact title so that
+	// nearby icon buttons (share, close, etc.) can never be clicked by mistake.
+	elems, err := page.Elements(`button.xhs-user-im-btn[title="发消息"]`)
+	if err == nil {
+		visible := make([]*rod.Element, 0, len(elems))
+		for _, elem := range elems {
+			isVisible, _ := elem.Visible()
+			if isVisible {
+				visible = append(visible, elem)
+			}
+		}
+		if len(visible) == 1 {
+			return visible[0], nil
+		}
+		if len(visible) > 1 {
+			return nil, fmt.Errorf("检测到多个主页私信入口")
+		}
+	}
+
+	// Keep compatibility with profiles that expose a normal text button.
+	return findVisibleExactText(page, []string{"私信", "发消息"}, "button, [role=button], a")
 }
 
 func describeVisibleActionControls(page *rod.Page) string {
