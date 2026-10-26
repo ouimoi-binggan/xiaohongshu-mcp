@@ -136,6 +136,11 @@ type ReplyNotificationArgs struct {
 	Content   string `json:"content" jsonschema:"回复内容"`
 }
 
+// SearchUsersArgs 搜索用户参数。
+type SearchUsersArgs struct {
+	Keyword string `json:"keyword" jsonschema:"用户昵称或完整小红书号"`
+}
+
 // InitMCPServer 初始化 MCP Server
 func InitMCPServer(appServer *AppServer) *mcp.Server {
 	// 创建 MCP Server
@@ -600,7 +605,23 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 		}),
 	)
 
-	logrus.Infof("Registered %d MCP tools", 19)
+	// 工具 20: 搜索用户
+	mcp.AddTool(server,
+		&mcp.Tool{
+			Name:        "search_xhs_users",
+			Description: "按昵称或小红书号搜索用户，返回公开的昵称、小红书号、内部用户ID和主页地址。只读，不关注、不私信。",
+			Annotations: &mcp.ToolAnnotations{
+				Title:        "Search Xiaohongshu Users",
+				ReadOnlyHint: true,
+			},
+		},
+		withPanicRecovery("search_xhs_users", func(ctx context.Context, req *mcp.CallToolRequest, args SearchUsersArgs) (*mcp.CallToolResult, any, error) {
+			result := appServer.handleSearchUsers(ctx, args.Keyword)
+			return convertToMCPResult(result), nil, nil
+		}),
+	)
+
+	logrus.Infof("Registered %d MCP tools", 20)
 }
 
 // convertToMCPResult 将自定义的 MCPToolResult 转换为官方 SDK 的格式

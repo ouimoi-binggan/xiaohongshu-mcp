@@ -649,6 +649,17 @@ func (s *XiaohongshuService) GetChatCapabilities(ctx context.Context) (*xiaohong
 	return xiaohongshu.NewChatAction(page).Probe(ctx)
 }
 
+// SearchUsers 在网页搜索页的用户分区查找公开账号信息。
+func (s *XiaohongshuService) SearchUsers(ctx context.Context, keyword string) ([]xiaohongshu.UserSearchItem, error) {
+	b := newBrowser()
+	defer b.Close()
+
+	page := b.NewPage()
+	defer page.Close()
+
+	return xiaohongshu.NewUserSearchAction(page).Search(ctx, keyword)
+}
+
 func newBrowser() *headless_browser.Browser {
 	return browser.NewBrowser(configs.IsHeadless(),
 		browser.WithFingerprintSeed(configs.FingerprintSeed()),

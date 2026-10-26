@@ -876,3 +876,18 @@ func (s *AppServer) handleGetChatCapabilities(ctx context.Context) *MCPToolResul
 
 	return marshalMCPResult(result, "检查聊天页")
 }
+
+// handleSearchUsers 按关键词搜索公开用户信息。
+func (s *AppServer) handleSearchUsers(ctx context.Context, keyword string) *MCPToolResult {
+	logrus.Infof("MCP: 搜索用户 keyword=%q", keyword)
+
+	result, err := s.xiaohongshuService.SearchUsers(ctx, keyword)
+	if err != nil {
+		return &MCPToolResult{
+			Content: []MCPContent{{Type: "text", Text: "搜索用户失败: " + err.Error()}},
+			IsError: true,
+		}
+	}
+
+	return marshalMCPResult(result, "搜索用户")
+}
