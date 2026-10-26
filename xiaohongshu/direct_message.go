@@ -274,7 +274,34 @@ func openRecipientChat(ctx context.Context, page *rod.Page, recipient UserSearch
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	return fmt.Errorf("点击私信后没有进入可编辑的聊天页，未发送")
+	return fmt.Errorf("点击私信后没有进入可编辑的聊天页，未发送；点击后页面状态：%s", describeMessageSurface(pp))
+}
+
+func describeMessageSurface(page *rod.Page) string {
+	res, err := page.Eval(`() => JSON.stringify({
+		url: location.href,
+		controls: [...document.querySelectorAll('textarea, input, [contenteditable], [role="textbox"], button')]
+			.filter(el => {
+				const r = el.getBoundingClientRect();
+				const s = getComputedStyle(el);
+				return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
+			})
+			.slice(-40)
+			.map(el => ({
+				tag: el.tagName.toLowerCase(),
+				text: (el.innerText || '').trim().slice(0, 40),
+				class_name: typeof el.className === 'string' ? el.className.slice(0, 160) : '',
+				title: (el.getAttribute('title') || '').slice(0, 80),
+				aria_label: (el.getAttribute('aria-label') || '').slice(0, 80),
+				placeholder: (el.getAttribute('placeholder') || '').slice(0, 80),
+				contenteditable: el.getAttribute('contenteditable'),
+				role: el.getAttribute('role')
+			}))
+	})`)
+	if err != nil {
+		return "（读取点击后页面结构失败）"
+	}
+	return res.Value.Str()
 }
 
 func findVisibleProfileMessageEntry(page *rod.Page) (*rod.Element, error) {
