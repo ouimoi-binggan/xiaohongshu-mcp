@@ -584,7 +584,22 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 		}),
 	)
 
-	logrus.Infof("Registered %d MCP tools", 18)
+	// 工具 19: 只读检查聊天页能力
+	mcp.AddTool(server,
+		&mcp.Tool{
+			Name:        "get_chat_capabilities",
+			Description: "只读检查当前账号的小红书聊天页结构，用于确认私信功能是否可自动化。不会读取联系人姓名、聊天内容或输入框内容，也不会发送消息。",
+			Annotations: &mcp.ToolAnnotations{
+				Title:        "Get Chat Capabilities",
+				ReadOnlyHint: true,
+			},
+		withPanicRecovery("get_chat_capabilities", func(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+			result := appServer.handleGetChatCapabilities(ctx)
+			return convertToMCPResult(result), nil, nil
+		}),
+	)
+
+	logrus.Infof("Registered %d MCP tools", 19)
 }
 
 // convertToMCPResult 将自定义的 MCPToolResult 转换为官方 SDK 的格式

@@ -638,6 +638,17 @@ func (s *XiaohongshuService) ReplyNotification(ctx context.Context, commentID, c
 	return xiaohongshu.NewNotificationAction(page).Reply(ctx, commentID, content)
 }
 
+// GetChatCapabilities 只读检查聊天页结构，不读取联系人或消息正文。
+func (s *XiaohongshuService) GetChatCapabilities(ctx context.Context) (*xiaohongshu.ChatCapabilities, error) {
+	b := newBrowser()
+	defer b.Close()
+
+	page := b.NewPage()
+	defer page.Close()
+
+	return xiaohongshu.NewChatAction(page).Probe(ctx)
+}
+
 func newBrowser() *headless_browser.Browser {
 	return browser.NewBrowser(configs.IsHeadless(),
 		browser.WithFingerprintSeed(configs.FingerprintSeed()),

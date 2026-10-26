@@ -861,3 +861,18 @@ func (s *AppServer) handleLikeNotification(ctx context.Context, commentID string
 
 	return marshalMCPResult(result, "点赞")
 }
+
+// handleGetChatCapabilities 只读检查聊天页可用控件。
+func (s *AppServer) handleGetChatCapabilities(ctx context.Context) *MCPToolResult {
+	logrus.Info("MCP: 检查聊天页能力")
+
+	result, err := s.xiaohongshuService.GetChatCapabilities(ctx)
+	if err != nil {
+		return &MCPToolResult{
+			Content: []MCPContent{{Type: "text", Text: "检查聊天页失败: " + err.Error()}},
+			IsError: true,
+		}
+	}
+
+	return marshalMCPResult(result, "检查聊天页")
+}
