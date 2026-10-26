@@ -593,6 +593,7 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 				Title:        "Get Chat Capabilities",
 				ReadOnlyHint: true,
 			},
+		},
 		withPanicRecovery("get_chat_capabilities", func(ctx context.Context, req *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 			result := appServer.handleGetChatCapabilities(ctx)
 			return convertToMCPResult(result), nil, nil
